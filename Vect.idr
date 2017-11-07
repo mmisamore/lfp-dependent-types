@@ -65,21 +65,20 @@ betterTake (S k) (x :: xs) {pf = IndLessThanEqual ip} = x :: betterTake k xs {pf
 -- k :<=: n is decidable. This means we either have a proof that k :<=: n or a proof that this is not the case.
 -- Important: the below function is total, so it gives a proof either way.
 decideLessThanEqual : (k : Nat) -> (n : Nat) -> Dec (k :<=: n)
-decideLessThanEqual Z n = Yes ZeroLessThanEqual 
-decideLessThanEqual (S k) Z = 
-  No succNotLessThan where
-    -- Impossible for a successor to be less than or equal to 0
-    succNotLessThan : ((S k) :<=: 0) -> Void
-    succNotLessThan ZeroLessThanEqual impossible
-    succNotLessThan (IndLessThanEqual _) impossible
-decideLessThanEqual (S k) (S j) = 
-  case decideLessThanEqual k j of
-    Yes pf => Yes (IndLessThanEqual pf)
-    No contra => No (contra . predLessThan) 
-  where
-      -- Taking predecessors preserves ordering
-      predLessThan : (S n :<=: S m) -> (n :<=: m)
-      predLessThan (IndLessThanEqual pf) = pf 
+decideLessThanEqual Z n     = Yes ZeroLessThanEqual 
+decideLessThanEqual (S k) Z = No succNotLessThan where
+                                -- Impossible for a successor to be less than or equal to 0
+                                succNotLessThan : ((S k) :<=: 0) -> Void
+                                succNotLessThan ZeroLessThanEqual impossible
+                                succNotLessThan (IndLessThanEqual _) impossible
+decideLessThanEqual (S k) (S j) 
+                            = case decideLessThanEqual k j of
+                                Yes pf => Yes (IndLessThanEqual pf)
+                                No contra => No (contra . predLessThan) 
+                              where
+                                -- Taking predecessors preserves ordering
+                                predLessThan : (S n :<=: S m) -> (n :<=: m)
+                                predLessThan (IndLessThanEqual pf) = pf 
 
 -- Now we can decide if we can take k elements from an n-element vector at runtime. This property is decidable at
 -- runtime and the typechecker statically enforces that we have a proof either way. 
@@ -107,36 +106,48 @@ reverseVect (x :: y) = rewrite (succIsPlusOne (lengthVect y)) in appendVect (rev
     succIsPlusOne Z     = Refl 
     succIsPlusOne (S k) = cong (succIsPlusOne k) 
 
-
 -- A type for proofs of vector equalities
 data VectsAreEqual : Vect n a -> Vect m a -> Type where
   EmptyVectEqual : VectsAreEqual Nil Nil 
-  IndVectAreEqual : (n = m) -> (x = y) -> VectsAreEqual xs ys -> VectsAreEqual (x :: xs) (y :: ys)
+  IndVectAreEqual : (x = y) -> VectsAreEqual xs ys -> VectsAreEqual (x :: xs) (y :: ys)
 
--- Lemma: Vectors differ if the first two elements differ
-firstEltsDiffer : (contra : (x = z) -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
-firstEltsDiffer contra (IndVectAreEqual _ firstEltPrf _) = contra firstEltPrf
+-- Lemma: Vectors are equal if first elements are equal and tails are also equal
+firstAndRestEqual : (firstEltPrf : x = z) -> (restPrf : VectsAreEqual y w) -> VectsAreEqual (x :: y) (z :: w)
+firstAndRestEqual firstEltPrf EmptyVectEqual 
+  = IndVectAreEqual firstEltPrf EmptyVectEqual 
+firstAndRestEqual firstEltPrf (IndVectAreEqual nextEltPrf restPrf) 
+  = let indPrf = IndVectAreEqual nextEltPrf restPrf 
+    in IndVectAreEqual firstEltPrf indPrf 
 
 -- Decide whether or not two vectors are equal at runtime assuming element equality is decidable. The output is a
--- *validated proof* explaining *why* they are equal or not, instead of just a Bool
+-- *verified proof* explaining *why* they are equal or not, instead of just a Bool
 decideVectorEq : DecEq a => (xs : Vect n a) -> (ys : Vect m a) -> Dec (VectsAreEqual xs ys) 
 decideVectorEq [] []       = Yes EmptyVectEqual 
 decideVectorEq [] (x :: y) = No emptyNotNonempty where
                               emptyNotNonempty : VectsAreEqual [] (x :: y) -> Void
                               emptyNotNonempty EmptyVectEqual impossible
-                              emptyNotNonempty (IndVectAreEqual _ _ _) impossible
+                              emptyNotNonempty (IndVectAreEqual _ _) impossible
 decideVectorEq (x :: y) [] = No nonEmptyIsNotEmpty where
                               nonEmptyIsNotEmpty : VectsAreEqual (x :: y) [] -> Void
                               nonEmptyIsNotEmpty EmptyVectEqual impossible
-                              nonEmptyIsNotEmpty (IndVectAreEqual _ _ _) impossible
+                              nonEmptyIsNotEmpty (IndVectAreEqual _ _) impossible
 decideVectorEq (x :: y) (z :: w) 
-                           = case decEq x z of
-                               -- The first elements are provably equal, so check the remainder
-                               Yes firstEltPrf => case decideVectorEq y w of
-                                                       Yes prf   => ?tbd_1
-                                                       No contra => ?tbd_2
-                               -- The first elements are provably unequal, so the vectors are too
-                               No contra => No (firstEltsDiffer contra) 
+  = case decEq x z of
+       -- The first elements are provably equal, so check the remainder
+       Yes firstEltPrf => case decideVectorEq y w of
+                               Yes restPrf => Yes (firstAndRestEqual firstEltPrf restPrf) 
+                               No contra   => No  (restDiffer firstEltPrf contra)
+       -- The first elements are provably unequal, so the vectors are too
+       No contra => No (firstEltsDiffer contra) 
+   where
+    -- Lemma: Vectors differ if the first two elements differ
+    firstEltsDiffer : (contra : (x = z) -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
+    firstEltsDiffer contra (IndVectAreEqual firstEltPrf _) = contra firstEltPrf
+
+    -- Lemma: Vectors with same first elts differ if the tails differ 
+    restDiffer : (firstEltPrf : x = z) -> (contra : VectsAreEqual y w -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
+    restDiffer _ contra (IndVectAreEqual _ restPrf) = contra restPrf 
+
 
 
 -- Decide if one vector is the reverse of another or not

@@ -106,6 +106,7 @@ reverseVect (x :: y) = rewrite (succIsPlusOne (lengthVect y)) in appendVect (rev
     succIsPlusOne Z     = Refl 
     succIsPlusOne (S k) = cong (succIsPlusOne k) 
 
+
 -- A type for proofs of vector equalities
 data VectsAreEqual : Vect n a -> Vect m a -> Type where
   EmptyVectEqual : VectsAreEqual Nil Nil 
@@ -139,6 +140,7 @@ decideVectorEq (x :: y) (z :: w)
                                No contra   => No  (restDiffer firstEltPrf contra)
        -- The first elements are provably unequal, so the vectors are too
        No contra => No (firstEltsDiffer contra) 
+
    where
     -- Lemma: Vectors differ if the first two elements differ
     firstEltsDiffer : (contra : (x = z) -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
@@ -149,6 +151,21 @@ decideVectorEq (x :: y) (z :: w)
     restDiffer _ contra (IndVectAreEqual _ restPrf) = contra restPrf 
 
 
+-- Type-safe head of a vector
+head : Vect (S n) a -> a
+head (x :: _) = x 
 
--- Decide if one vector is the reverse of another or not
+-- Type-safe tail of a vector
+tail : Vect (S n) a -> Vect n a
+tail (_ :: y) = y 
 
+-- Make Cons vectors decomposable at the type level
+data ConsVect : Nat -> a -> Vect n a -> Type where
+  Cons : (x : a) -> (xs : Vect n a) -> ConsVect (S n) x xs 
+
+
+-- Type of proofs that a vector is the reverse of another vector
+data Reversed : Vect n a -> Vect m a -> Type where
+  ReversedEmpty  : Reversed [] []
+  ReversedSingle : ConsVect 1 a [] -> ConsVect 1 a [] -> Reversed xs ys 
+  -- ReversedMulti  : (xs : Vect (S n) a) -> (ys : Vect (S n) a) -> (head xs =  

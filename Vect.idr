@@ -25,9 +25,18 @@ appendVect : Vect n a -> Vect m a -> Vect (n + m) a
 appendVect [] y = y 
 appendVect (x :: z) y = x :: appendVect z y
 
+-- Empty vector is left neutral
+lemLeftAppendNil : (xs : Vect n a) -> (appendVect [] xs = xs)
+lemLeftAppendNil xs = Refl
+
+-- Empty vector is right neutral
+lemRightAppendNil : (xs : Vect n a) -> (appendVect xs [] = xs)
+lemRightAppendNil [] = Refl
+lemRightAppendNil (x :: y) = rewrite lemRightAppendNil y in Refl 
+
 -- Return the length of a vector. Here "n" is implicit argument
 lengthVect : Vect n a -> Nat
-lengthVect {n} x = n 
+lengthVect {n} xs = n 
 
 -- Zip two vectors. Note we don't have to truncate because we know they 
 -- have same lengths at the type level.
@@ -38,8 +47,15 @@ zipVect (x :: z) (y :: w) = (x,y) :: zipVect z w
 
 -- Take first k elements from a vector of known length
 vectTake : (k : Nat) -> Vect (k + l) a -> Vect k a 
-vectTake Z _ = Nil 
-vectTake (S k) (x :: xs) = x :: vectTake k xs 
+vectTake Z x            = []
+vectTake (S k) (x :: y) = let result = vectTake k y in
+                              x :: result
+
+{-vectTake Z _ = Nil -}
+{-vectTake (S k) (x :: xs) = x :: vectTake k xs -}
+
+
+
 -- vectTake 4 [1,2,3] is a type error
 -- return type depends on input "k" and is guaranteed to have k elements
 
@@ -99,56 +115,30 @@ vectTakeK = do
 -- where it didn't!
 reverseVect : Vect n a -> Vect n a
 reverseVect []       = [] 
-reverseVect (x :: y) = rewrite (succIsPlusOne (lengthVect y)) in appendVect (reverseVect y) [x] 
+reverseVect (x :: xs) = rewrite (succIsPlusOne (lengthVect xs)) in appendVect (reverseVect xs) [x] 
   where
     -- Prove that the successor of n is the same as n + 1
     succIsPlusOne : (n : Nat) -> (S n = plus n 1)
     succIsPlusOne Z     = Refl 
     succIsPlusOne (S k) = cong (succIsPlusOne k) 
 
+-- Reverse of empty vector is also empty
+lemReverseEmpty : (xs = []) -> (xs = reverseVect xs)
+lemReverseEmpty Refl = Refl
 
--- A type for proofs of vector equalities
-data VectsAreEqual : Vect n a -> Vect m a -> Type where
-  EmptyVectEqual : VectsAreEqual Nil Nil 
-  IndVectAreEqual : (x = y) -> VectsAreEqual xs ys -> VectsAreEqual (x :: xs) (y :: ys)
+-- Reverse of singleton vector is the same singleton
+lemReverseSingleton : ([x] = reverseVect [x])
+lemReverseSingleton = Refl
 
--- Lemma: Vectors are equal if first elements are equal and tails are also equal
-firstAndRestEqual : (firstEltPrf : x = z) -> (restPrf : VectsAreEqual y w) -> VectsAreEqual (x :: y) (z :: w)
-firstAndRestEqual firstEltPrf EmptyVectEqual 
-  = IndVectAreEqual firstEltPrf EmptyVectEqual 
-firstAndRestEqual firstEltPrf (IndVectAreEqual nextEltPrf restPrf) 
-  = let indPrf = IndVectAreEqual nextEltPrf restPrf 
-    in IndVectAreEqual firstEltPrf indPrf 
+some1 : (ys : Vect m a) -> (reverseVect ys = appendVect (reverseVect ys) [])
+some1 ys = rewrite lemRightAppendNil (reverseVect ys) in Refl 
 
--- Decide whether or not two vectors are equal at runtime assuming element equality is decidable. The output is a
--- *verified proof* explaining *why* they are equal or not, instead of just a Bool
-decideVectorEq : DecEq a => (xs : Vect n a) -> (ys : Vect m a) -> Dec (VectsAreEqual xs ys) 
-decideVectorEq [] []       = Yes EmptyVectEqual 
-decideVectorEq [] (x :: y) = No emptyNotNonempty where
-                              emptyNotNonempty : VectsAreEqual [] (x :: y) -> Void
-                              emptyNotNonempty EmptyVectEqual impossible
-                              emptyNotNonempty (IndVectAreEqual _ _) impossible
-decideVectorEq (x :: y) [] = No nonEmptyIsNotEmpty where
-                              nonEmptyIsNotEmpty : VectsAreEqual (x :: y) [] -> Void
-                              nonEmptyIsNotEmpty EmptyVectEqual impossible
-                              nonEmptyIsNotEmpty (IndVectAreEqual _ _) impossible
-decideVectorEq (x :: y) (z :: w) 
-  = case decEq x z of
-       -- The first elements are provably equal, so check the remainder
-       Yes firstEltPrf => case decideVectorEq y w of
-                               Yes restPrf => Yes (firstAndRestEqual firstEltPrf restPrf) 
-                               No contra   => No  (restDiffer firstEltPrf contra)
-       -- The first elements are provably unequal, so the vectors are too
-       No contra => No (firstEltsDiffer contra) 
-
-   where
-    -- Lemma: Vectors differ if the first two elements differ
-    firstEltsDiffer : (contra : (x = z) -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
-    firstEltsDiffer contra (IndVectAreEqual firstEltPrf _) = contra firstEltPrf
-
-    -- Lemma: Vectors with same first elts differ if the tails differ 
-    restDiffer : (firstEltPrf : x = z) -> (contra : VectsAreEqual y w -> Void) -> VectsAreEqual (x :: y) (z :: w) -> Void
-    restDiffer _ contra (IndVectAreEqual _ restPrf) = contra restPrf 
+-- Reverse of an append is the append of the reversed in the opposite order 
+lemReverseAppend : (xs : Vect n a) -> (ys : Vect m a) -> (reverseVect (appendVect xs ys) = appendVect (reverseVect ys) (reverseVect xs))
+lemReverseAppend [] [] = Refl
+lemReverseAppend [] ys = rewrite lemRightAppendNil (reverseVect ys) in Refl
+lemReverseAppend xs [] = rewrite lemRightAppendNil xs in Refl 
+lemReverseAppend (x :: y) (z :: w) = ?some
 
 
 -- Type-safe head of a vector
@@ -159,13 +149,44 @@ head (x :: _) = x
 tail : Vect (S n) a -> Vect n a
 tail (_ :: y) = y 
 
+-- Lemma: Vectors differ if they differ in length
+vectDiffOnLength : (xs : Vect n a) -> (ys : Vect m a) -> ((n = m) -> Void) -> (xs = ys) -> Void
+vectDiffOnLength ys ys c Refl = c Refl 
+
+-- Lemma: Zero is never a successor
+zeroNotSuccessor : (0 = S n) -> Void
+zeroNotSuccessor Refl impossible
+
+-- Lemma: Nonempty vectors differ if the tails differ
+restDiffer : (y : Vect n a) -> (w : Vect m a) -> ((y = w) -> Void) -> (x :: y = z :: w) -> Void
+restDiffer w w contra Refl = contra Refl 
+
+-- Lemma: Nonempty vectors differ if the first elements differ
+firstEltsDiffer : (y : Vect n a) -> (w : Vect m a) -> ((x = z) -> Void) -> (x :: y = z :: w) -> Void
+firstEltsDiffer w w contra Refl = contra Refl 
+
+-- Better decidable equality for Vectors
+decEquality : DecEq a => (xs : Vect n a) -> (ys : Vect m a) -> Dec (xs = ys)
+decEquality [] []       = Yes Refl 
+decEquality [] (x :: y) = No (\refl => vectDiffOnLength [] (x::y) zeroNotSuccessor refl) 
+decEquality (x :: y) [] = No (\refl => vectDiffOnLength [] (x::y) zeroNotSuccessor (sym refl)) 
+decEquality (x :: y) (z :: w) = 
+  case decEq x z of
+    Yes Refl => case decEquality y w of
+                  Yes Refl   => Yes Refl
+                  No  contra => No (restDiffer y w contra)
+    No contra => No (firstEltsDiffer y w contra)
+
+
+
+
 -- Make Cons vectors decomposable at the type level
-data ConsVect : Nat -> a -> Vect n a -> Type where
-  Cons : (x : a) -> (xs : Vect n a) -> ConsVect (S n) x xs 
+{-data ConsVect : Nat -> a -> Vect n a -> Type where-}
+  {-Cons : (x : a) -> (xs : Vect n a) -> ConsVect (S n) x xs -}
 
 
 -- Type of proofs that a vector is the reverse of another vector
-data Reversed : Vect n a -> Vect m a -> Type where
-  ReversedEmpty  : Reversed [] []
-  ReversedSingle : ConsVect 1 a [] -> ConsVect 1 a [] -> Reversed xs ys 
+{-data Reversed : Vect n a -> Vect m a -> Type where-}
+  {-ReversedEmpty  : Reversed [] []-}
+  {-ReversedSingle : ConsVect 1 a [] -> ConsVect 1 a [] -> Reversed xs ys -}
   -- ReversedMulti  : (xs : Vect (S n) a) -> (ys : Vect (S n) a) -> (head xs =  

@@ -4,7 +4,7 @@ import Data.String
 import Decidable.Equality
 
 -- All functions are total by default
-%default total
+-- %default total
 
 -- Vectors with known lengths
 data Vect : Nat -> Type -> Type where
@@ -20,6 +20,14 @@ Show a => Show (Vect n a) where
     showHelper [x] = show x
     showHelper (x :: y) = show x ++ ", " ++ showHelper y 
 
+-- Type-safe head of a vector
+head : Vect (S n) a -> a
+head (x :: _) = x 
+
+-- Type-safe tail of a vector
+tail : Vect (S n) a -> Vect n a
+tail (_ :: y) = y 
+
 -- Append two vectors and record new length in the type
 appendVect : Vect n a -> Vect m a -> Vect (n + m) a
 appendVect [] y = y 
@@ -31,8 +39,17 @@ lemLeftAppendNil xs = Refl
 
 -- Empty vector is right neutral
 lemRightAppendNil : (xs : Vect n a) -> (appendVect xs [] = xs)
-lemRightAppendNil [] = Refl
+lemRightAppendNil []       = Refl
 lemRightAppendNil (x :: y) = rewrite lemRightAppendNil y in Refl 
+
+-- Append is associative so vector append is a monoid
+lemAppendAssoc : (xs : Vect n a) -> (ys : Vect m a) -> (zs : Vect o a) 
+              -> (appendVect (appendVect xs ys) zs = appendVect xs (appendVect ys zs))
+lemAppendAssoc [] ys zs = Refl
+lemAppendAssoc xs [] zs = rewrite lemRightAppendNil xs in Refl
+lemAppendAssoc xs ys [] = rewrite lemRightAppendNil ys in 
+                          rewrite lemRightAppendNil (appendVect xs ys) in Refl 
+lemAppendAssoc (x :: xs) (y :: ys) (z :: zs) = rewrite lemAppendAssoc xs (y :: ys) (z :: zs) in Refl 
 
 -- Return the length of a vector. Here "n" is implicit argument
 lengthVect : Vect n a -> Nat
@@ -141,14 +158,6 @@ lemReverseAppend xs [] = rewrite lemRightAppendNil xs in Refl
 lemReverseAppend (x :: y) (z :: w) = ?some
 
 
--- Type-safe head of a vector
-head : Vect (S n) a -> a
-head (x :: _) = x 
-
--- Type-safe tail of a vector
-tail : Vect (S n) a -> Vect n a
-tail (_ :: y) = y 
-
 -- Lemma: Vectors differ if they differ in length
 vectDiffOnLength : (xs : Vect n a) -> (ys : Vect m a) -> ((n = m) -> Void) -> (xs = ys) -> Void
 vectDiffOnLength ys ys c Refl = c Refl 
@@ -176,7 +185,6 @@ decEquality (x :: y) (z :: w) =
                   Yes Refl   => Yes Refl
                   No  contra => No (restDiffer y w contra)
     No contra => No (firstEltsDiffer y w contra)
-
 
 
 

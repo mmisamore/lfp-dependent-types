@@ -4,7 +4,7 @@ import Data.String
 import Decidable.Equality
 
 -- All functions are total by default
--- %default total
+%default total
 
 -- Vectors with known lengths
 data Vect : Nat -> Type -> Type where
@@ -26,7 +26,19 @@ head (x :: _) = x
 
 -- Type-safe tail of a vector
 tail : Vect (S n) a -> Vect n a
-tail (_ :: y) = y 
+tail (_ :: xs) = xs 
+
+%hide last
+-- Type-safe last element of a vector
+last : Vect (S n) a -> a
+last (x :: [])        = x
+last (_ :: (y :: xs)) = last (y :: xs) 
+
+%hide init
+-- Type-safe non-empty initial segment of a vector
+init : Vect (S n) a -> Vect n a
+init (x :: [])        = [] 
+init (x :: (y :: xs)) = x :: (init (y :: xs))  
 
 -- Append two vectors and record new length in the type
 appendVect : Vect n a -> Vect m a -> Vect (n + m) a
@@ -42,7 +54,7 @@ lemRightAppendNil : (xs : Vect n a) -> (appendVect xs [] = xs)
 lemRightAppendNil []       = Refl
 lemRightAppendNil (x :: y) = rewrite lemRightAppendNil y in Refl 
 
--- Append is associative so vector append is a monoid
+-- Append is associative vectors with append are a monoid
 lemAppendAssoc : (xs : Vect n a) -> (ys : Vect m a) -> (zs : Vect o a) 
               -> (appendVect (appendVect xs ys) zs = appendVect xs (appendVect ys zs))
 lemAppendAssoc [] ys zs = Refl
@@ -50,6 +62,15 @@ lemAppendAssoc xs [] zs = rewrite lemRightAppendNil xs in Refl
 lemAppendAssoc xs ys [] = rewrite lemRightAppendNil ys in 
                           rewrite lemRightAppendNil (appendVect xs ys) in Refl 
 lemAppendAssoc (x :: xs) (y :: ys) (z :: zs) = rewrite lemAppendAssoc xs (y :: ys) (z :: zs) in Refl 
+
+-- Lemma: A non-empty vector can be decomposed into the append of a head to a tail
+lemUnCons : (xs : Vect (S n) a) -> (appendVect [head xs] (tail xs) = xs)
+lemUnCons (x :: xs) = Refl
+
+-- Lemma: A non-empty vector can be decomposed into the append of an initial segment to the last elt
+lemUnSnoc : (xs : Vect (S n) a) -> (appendVect (init xs) [last xs] = xs)
+lemUnSnoc (x :: [])        = Refl
+lemUnSnoc (x :: (y :: xs)) = rewrite lemUnSnoc (y :: xs) in Refl 
 
 -- Return the length of a vector. Here "n" is implicit argument
 lengthVect : Vect n a -> Nat
@@ -64,15 +85,8 @@ zipVect (x :: z) (y :: w) = (x,y) :: zipVect z w
 
 -- Take first k elements from a vector of known length
 vectTake : (k : Nat) -> Vect (k + l) a -> Vect k a 
-vectTake Z x            = []
-vectTake (S k) (x :: y) = let result = vectTake k y in
-                              x :: result
-
-{-vectTake Z _ = Nil -}
-{-vectTake (S k) (x :: xs) = x :: vectTake k xs -}
-
-
-
+vectTake Z _             = Nil 
+vectTake (S k) (x :: xs) = x :: vectTake k xs 
 -- vectTake 4 [1,2,3] is a type error
 -- return type depends on input "k" and is guaranteed to have k elements
 
@@ -126,36 +140,93 @@ vectTakeK = do
 -- :exec vectTakeK is a program that takes user input of k and returns first k elements of fixed-length vector,
 -- if possible, with a statically enforced boundary check. Observe that vectTakeK is total: it provably cannot crash!
 
+-- O(n^2) list reversal
+reverse1 : List a -> List a 
+reverse1 []        = [] 
+reverse1 (x :: xs) = (reverse1 xs) ++ [x] 
 
--- Let's reverse a vector and prove that the reverse has the same length as the initial vector
--- Note that we haven't proven that we actually reversed the vector, and the initial version of this function had a bug
--- where it didn't!
+-- Lemma: Reversing an append of Lists is the same as appending the reversed Lists in reverse
+lemReverseAppend : (xs : List a) -> (ys : List a) -> (reverse1 (xs ++ ys) = reverse1 ys ++ reverse1 xs)
+lemReverseAppend [] ys        = rewrite List.appendNilRightNeutral (reverse1 ys) in Refl
+lemReverseAppend (x :: xs) ys = rewrite lemReverseAppend xs ys in
+                                rewrite List.appendAssociative (reverse1 ys) (reverse1 xs) [x] in
+                                Refl
+
+-- Lemma: Reversing a List twice (with naive algo) is the identity
+lemReverseInvolution : (xs : List a) -> (reverse1 (reverse1 xs) = xs)
+lemReverseInvolution []        = Refl
+lemReverseInvolution (x :: xs) = rewrite lemReverseAppend (reverse1 xs) [x] in 
+                                 rewrite lemReverseInvolution xs in
+                                 Refl 
+
+-- The successor of n is the same as n + 1
+lemSuccIsPlusOne : (n : Nat) -> (S n = plus n 1)
+lemSuccIsPlusOne Z     = Refl 
+lemSuccIsPlusOne (S k) = cong (lemSuccIsPlusOne k) 
+
+-- Zero is right additive identity for naturals
+lemPlusZero : (n : Nat) -> (n + 0 = n)
+lemPlusZero Z     = Refl
+lemPlusZero (S k) = cong (lemPlusZero k)
+
+-- Successor distributes over a sum on the right
+lemSuccPlusRightSucc : (n : Nat) -> (m : Nat) -> S (n + m) = n + (S m)
+lemSuccPlusRightSucc Z m     = Refl
+lemSuccPlusRightSucc (S k) m = cong (lemSuccPlusRightSucc k m) 
+
+-- Addition of naturals is commutative
+lemPlusCommutes : (n : Nat) -> (m : Nat) -> (n + m = m + n)
+lemPlusCommutes Z m     = rewrite lemPlusZero m in Refl
+lemPlusCommutes (S k) m = rewrite lemPlusCommutes k m in
+                          rewrite lemSuccPlusRightSucc m k in
+                          Refl
+
+-- Naive reversal of a vector. Defined by the mathematical definition but O(n^2)
 reverseVect : Vect n a -> Vect n a
-reverseVect []       = [] 
-reverseVect (x :: xs) = rewrite (succIsPlusOne (lengthVect xs)) in appendVect (reverseVect xs) [x] 
-  where
-    -- Prove that the successor of n is the same as n + 1
-    succIsPlusOne : (n : Nat) -> (S n = plus n 1)
-    succIsPlusOne Z     = Refl 
-    succIsPlusOne (S k) = cong (succIsPlusOne k) 
+reverseVect [] = []
+reverseVect {n = S k} (x :: xs) = rewrite lemSuccIsPlusOne k in appendVect (reverseVect xs) [x]
 
--- Reverse of empty vector is also empty
-lemReverseEmpty : (xs = []) -> (xs = reverseVect xs)
-lemReverseEmpty Refl = Refl
+data IsReversed : (xs : Vect n a) -> (ys : Vect m a) -> Type where
+  EmptyIsReversed  : IsReversed [] []
+  SingleIsReversed : IsReversed [x] [x]
+  ConsIsReversed   : IsReversed (tail xs) (init ys) -> (head xs = last ys) -> IsReversed xs ys
 
--- Reverse of singleton vector is the same singleton
-lemReverseSingleton : ([x] = reverseVect [x])
-lemReverseSingleton = Refl
+-- Prove that reversing a vector append is the same as appending the reverses in reverse order. Requires some fancy
+-- footwork to persude the typechecker. This is apparently due to the rewrite in the "reverseVect" definition.
+{-lemReverseVectAppend : (xs : Vect n a) -> (ys : Vect m a) -> -}
+                       {-(reverseVect (appendVect xs ys) = appendVect (reverseVect ys) (reverseVect xs))-}
+{-lemReverseVectAppend [] []          = Refl-}
+{-lemReverseVectAppend [] (y :: ys)   = rewrite lemReverseVectAppend [y] ys in -}
+                                      {-rewrite lemRightAppendNil (appendVect (reverseVect ys) [y]) in-}
+                                      {-Refl-}
+{-lemReverseVectAppend {n = S k} {m = Z} (x :: xs) [] = rewrite sym (lemPlusZero k) in ?help -}
+{-lemReverseVectAppend (x :: xs) (y :: ys) = ?help2-}
 
-some1 : (ys : Vect m a) -> (reverseVect ys = appendVect (reverseVect ys) [])
-some1 ys = rewrite lemRightAppendNil (reverseVect ys) in Refl 
+{-lemReverseVectAppend [] [] = Refl-}
+{-lemReverseVectAppend [] (y :: ys) -}
+                           {-= rewrite lemReverseVectAppend [y] ys in -}
+                             {-rewrite lemRightAppendNil (appendVect (reverseVect ys) [y]) in-}
+                             {-Refl-}
+{-lemReverseVectAppend (x :: xs) [] -}
+                           {-= rewrite lemReverseVectAppend [x] (appendVect xs []) in -}
+                             {-rewrite lemReverseVectAppend [x] xs in-}
+                             {-rewrite lemRightAppendNil xs in-}
+                             {-Refl -}
+{-lemReverseVectAppend (x :: xs) (y :: ys) -}
+                           {-= rewrite lemReverseVectAppend [y] ys in-}
+                             {-rewrite lemReverseVectAppend [x] xs in-}
+                             {-rewrite lemReverseVectAppend [x] (appendVect xs (y :: ys)) in-}
+                             {-rewrite sym (lemAppendAssoc (appendVect (reverseVect ys) [y]) (reverseVect xs) [x]) in-}
+                             {-rewrite lemReverseVectAppend xs (y :: ys) in-}
+                             {-rewrite lemReverseVectAppend [y] ys in-}
+                             {-Refl-}
 
--- Reverse of an append is the append of the reversed in the opposite order 
-lemReverseAppend : (xs : Vect n a) -> (ys : Vect m a) -> (reverseVect (appendVect xs ys) = appendVect (reverseVect ys) (reverseVect xs))
-lemReverseAppend [] [] = Refl
-lemReverseAppend [] ys = rewrite lemRightAppendNil (reverseVect ys) in Refl
-lemReverseAppend xs [] = rewrite lemRightAppendNil xs in Refl 
-lemReverseAppend (x :: y) (z :: w) = ?some
+-- Prove that reversing a vector is involutive
+{-lemReverseReverseIsId : (xs : Vect n a) -> (reverseVect (reverseVect xs) = xs)-}
+{-lemReverseReverseIsId [] = ?lemReverseReverseIsId_rhs_1-}
+{-lemReverseReverseIsId (x :: y) = ?lemReverseReverseIsId_rhs_2-}
+
+
 
 
 -- Lemma: Vectors differ if they differ in length
@@ -191,7 +262,6 @@ decEquality (x :: y) (z :: w) =
 -- Make Cons vectors decomposable at the type level
 {-data ConsVect : Nat -> a -> Vect n a -> Type where-}
   {-Cons : (x : a) -> (xs : Vect n a) -> ConsVect (S n) x xs -}
-
 
 -- Type of proofs that a vector is the reverse of another vector
 {-data Reversed : Vect n a -> Vect m a -> Type where-}

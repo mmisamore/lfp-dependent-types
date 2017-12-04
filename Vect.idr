@@ -46,17 +46,17 @@ appendVect [] y = y
 appendVect (x :: z) y = x :: appendVect z y
 
 -- Empty vector is left neutral
-lemLeftAppendNil : (xs : Vect n a) -> (appendVect [] xs = xs)
+lemLeftAppendNil : (xs : Vect n a) -> appendVect [] xs = xs
 lemLeftAppendNil xs = Refl
 
 -- Empty vector is right neutral
-lemRightAppendNil : (xs : Vect n a) -> (appendVect xs [] = xs)
+lemRightAppendNil : (xs : Vect n a) -> appendVect xs [] = xs
 lemRightAppendNil []       = Refl
 lemRightAppendNil (x :: y) = rewrite lemRightAppendNil y in Refl 
 
 -- Append is associative vectors with append are a monoid
 lemAppendAssoc : (xs : Vect n a) -> (ys : Vect m a) -> (zs : Vect o a) 
-              -> (appendVect (appendVect xs ys) zs = appendVect xs (appendVect ys zs))
+              -> appendVect (appendVect xs ys) zs = appendVect xs (appendVect ys zs)
 lemAppendAssoc [] ys zs = Refl
 lemAppendAssoc xs [] zs = rewrite lemRightAppendNil xs in Refl
 lemAppendAssoc xs ys [] = rewrite lemRightAppendNil ys in 
@@ -64,11 +64,11 @@ lemAppendAssoc xs ys [] = rewrite lemRightAppendNil ys in
 lemAppendAssoc (x :: xs) (y :: ys) (z :: zs) = rewrite lemAppendAssoc xs (y :: ys) (z :: zs) in Refl 
 
 -- Lemma: A non-empty vector can be decomposed into the append of a head to a tail
-lemUnCons : (xs : Vect (S n) a) -> (appendVect [head xs] (tail xs) = xs)
+lemUnCons : (xs : Vect (S n) a) -> appendVect [head xs] (tail xs) = xs
 lemUnCons (x :: xs) = Refl
 
 -- Lemma: A non-empty vector can be decomposed into the append of an initial segment to the last elt
-lemUnSnoc : (xs : Vect (S n) a) -> (appendVect (init xs) [last xs] = xs)
+lemUnSnoc : (xs : Vect (S n) a) -> appendVect (init xs) [last xs] = xs
 lemUnSnoc (x :: [])        = Refl
 lemUnSnoc (x :: (y :: xs)) = rewrite lemUnSnoc (y :: xs) in Refl 
 
@@ -146,85 +146,150 @@ reverse1 []        = []
 reverse1 (x :: xs) = (reverse1 xs) ++ [x] 
 
 -- Lemma: Reversing an append of Lists is the same as appending the reversed Lists in reverse
-lemReverseAppend : (xs : List a) -> (ys : List a) -> (reverse1 (xs ++ ys) = reverse1 ys ++ reverse1 xs)
+lemReverseAppend : (xs : List a) -> (ys : List a) -> reverse1 (xs ++ ys) = reverse1 ys ++ reverse1 xs
 lemReverseAppend [] ys        = rewrite List.appendNilRightNeutral (reverse1 ys) in Refl
 lemReverseAppend (x :: xs) ys = rewrite lemReverseAppend xs ys in
                                 rewrite List.appendAssociative (reverse1 ys) (reverse1 xs) [x] in
                                 Refl
 
 -- Lemma: Reversing a List twice (with naive algo) is the identity
-lemReverseInvolution : (xs : List a) -> (reverse1 (reverse1 xs) = xs)
+lemReverseInvolution : (xs : List a) -> reverse1 (reverse1 xs) = xs
 lemReverseInvolution []        = Refl
 lemReverseInvolution (x :: xs) = rewrite lemReverseAppend (reverse1 xs) [x] in 
                                  rewrite lemReverseInvolution xs in
                                  Refl 
 
--- The successor of n is the same as n + 1
-lemSuccIsPlusOne : (n : Nat) -> (S n = plus n 1)
+-- Lemma: The successor of n is the same as n + 1
+lemSuccIsPlusOne : (n : Nat) -> S n = plus n 1
 lemSuccIsPlusOne Z     = Refl 
 lemSuccIsPlusOne (S k) = cong (lemSuccIsPlusOne k) 
 
--- Zero is right additive identity for naturals
-lemPlusZero : (n : Nat) -> (n + 0 = n)
+-- Lemma: Zero is right additive identity for naturals
+lemPlusZero : (n : Nat) -> n + 0 = n
 lemPlusZero Z     = Refl
 lemPlusZero (S k) = cong (lemPlusZero k)
 
--- Successor distributes over a sum on the right
+-- Lemma: Successor distributes over a sum on the right
 lemSuccPlusRightSucc : (n : Nat) -> (m : Nat) -> S (n + m) = n + (S m)
 lemSuccPlusRightSucc Z m     = Refl
 lemSuccPlusRightSucc (S k) m = cong (lemSuccPlusRightSucc k m) 
 
--- Addition of naturals is commutative
-lemPlusCommutes : (n : Nat) -> (m : Nat) -> (n + m = m + n)
+-- Lemma: Addition of naturals is commutative
+lemPlusCommutes : (n : Nat) -> (m : Nat) -> n + m = m + n
 lemPlusCommutes Z m     = rewrite lemPlusZero m in Refl
 lemPlusCommutes (S k) m = rewrite lemPlusCommutes k m in
                           rewrite lemSuccPlusRightSucc m k in
                           Refl
 
--- Naive reversal of a vector. Defined by the mathematical definition but O(n^2)
+-- Lemma: Succ on the left is the same as Succ on the right 
+lemLeftSuccRightSucc : (n : Nat) -> (m : Nat) -> (S n) + m = n + (S m)
+lemLeftSuccRightSucc Z m     = Refl
+lemLeftSuccRightSucc (S k) m = cong (lemSuccPlusRightSucc k m)
+
+-- O(n) vector reversal. Uses rewrite.
 reverseVect : Vect n a -> Vect n a
-reverseVect [] = []
-reverseVect {n = S k} (x :: xs) = rewrite lemSuccIsPlusOne k in appendVect (reverseVect xs) [x]
+reverseVect xs = go [] xs where 
+  go : Vect n a -> Vect m a -> Vect (n + m) a 
+  go {n} acc []                  = rewrite lemPlusZero n in acc
+  go {n} {m = S m} acc (x :: xs) = rewrite sym (lemLeftSuccRightSucc n m) in go (x :: acc) xs
 
-data IsReversed : (xs : Vect n a) -> (ys : Vect m a) -> Type where
-  EmptyIsReversed  : IsReversed [] []
-  SingleIsReversed : IsReversed [x] [x]
-  ConsIsReversed   : IsReversed (tail xs) (init ys) -> (head xs = last ys) -> IsReversed xs ys
+-- O(n^2) vector reversal. This is the mathematical definition.
+reverseVect2 : Vect n a -> Vect n a
+reverseVect2 [] = []
+reverseVect2 {n = S k} (x :: xs) = rewrite lemSuccIsPlusOne k in appendVect (reverseVect2 xs) [x]
 
--- Prove that reversing a vector append is the same as appending the reverses in reverse order. Requires some fancy
--- footwork to persude the typechecker. This is apparently due to the rewrite in the "reverseVect" definition.
-{-lemReverseVectAppend : (xs : Vect n a) -> (ys : Vect m a) -> -}
-                       {-(reverseVect (appendVect xs ys) = appendVect (reverseVect ys) (reverseVect xs))-}
-{-lemReverseVectAppend [] []          = Refl-}
-{-lemReverseVectAppend [] (y :: ys)   = rewrite lemReverseVectAppend [y] ys in -}
-                                      {-rewrite lemRightAppendNil (appendVect (reverseVect ys) [y]) in-}
-                                      {-Refl-}
-{-lemReverseVectAppend {n = S k} {m = Z} (x :: xs) [] = rewrite sym (lemPlusZero k) in ?help -}
-{-lemReverseVectAppend (x :: xs) (y :: ys) = ?help2-}
+-- Type of snoc vectors
+data SnocVect : Nat -> Type -> Type where
+  SnocNil : SnocVect 0 a
+  Snoc : SnocVect n a -> a -> SnocVect (S n) a
 
-{-lemReverseVectAppend [] [] = Refl-}
-{-lemReverseVectAppend [] (y :: ys) -}
-                           {-= rewrite lemReverseVectAppend [y] ys in -}
-                             {-rewrite lemRightAppendNil (appendVect (reverseVect ys) [y]) in-}
-                             {-Refl-}
-{-lemReverseVectAppend (x :: xs) [] -}
-                           {-= rewrite lemReverseVectAppend [x] (appendVect xs []) in -}
-                             {-rewrite lemReverseVectAppend [x] xs in-}
-                             {-rewrite lemRightAppendNil xs in-}
-                             {-Refl -}
-{-lemReverseVectAppend (x :: xs) (y :: ys) -}
-                           {-= rewrite lemReverseVectAppend [y] ys in-}
-                             {-rewrite lemReverseVectAppend [x] xs in-}
-                             {-rewrite lemReverseVectAppend [x] (appendVect xs (y :: ys)) in-}
-                             {-rewrite sym (lemAppendAssoc (appendVect (reverseVect ys) [y]) (reverseVect xs) [x]) in-}
-                             {-rewrite lemReverseVectAppend xs (y :: ys) in-}
-                             {-rewrite lemReverseVectAppend [y] ys in-}
-                             {-Refl-}
+-- Every vector is a snoc vector
+snocOfVect : Vect n a -> SnocVect n a
+snocOfVect []          = SnocNil
+snocOfVect v@(x :: xs) = Snoc (snocOfVect (init v)) (last v) 
 
--- Prove that reversing a vector is involutive
-{-lemReverseReverseIsId : (xs : Vect n a) -> (reverseVect (reverseVect xs) = xs)-}
-{-lemReverseReverseIsId [] = ?lemReverseReverseIsId_rhs_1-}
-{-lemReverseReverseIsId (x :: y) = ?lemReverseReverseIsId_rhs_2-}
+-- Take the head of a snoc vector
+snocHead : SnocVect (S n) a -> a
+snocHead (Snoc SnocNil x)       = x 
+snocHead (Snoc s@(Snoc xs y) x) = snocHead s 
+
+-- Take the tail of a snoc vector
+snocTail : SnocVect (S n) a -> SnocVect n a
+snocTail (Snoc SnocNil x)       = SnocNil
+snocTail (Snoc s@(Snoc xs y) x) = Snoc (snocTail s) x
+
+-- Every snoc vector is a vector
+vectOfSnoc : SnocVect n a -> Vect n a
+vectOfSnoc SnocNil       = []
+vectOfSnoc s@(Snoc xs x) = snocHead s :: vectOfSnoc (snocTail s)
+
+-- Lemma: Head of a vector of a Snoc is the head
+lemHeadVectOfSnoc : (xs : SnocVect (S n) a) -> head (vectOfSnoc xs) = snocHead xs 
+lemHeadVectOfSnoc (Snoc xs x) = Refl
+
+-- Lemma: Head of a Snoc of a vector is the head 
+lemHeadSnocOfVect : (xs : Vect (S n) a) -> snocHead (snocOfVect xs) = head xs
+lemHeadSnocOfVect (x :: xs) = lemHeadSnocOfVect_1 xs x
+  where
+    -- Lemma: Head of a snoc vector with non-empty initial segment is the head of the initial segment
+    lemSnocHeadOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocHead (Snoc xs x) = snocHead xs 
+    lemSnocHeadOfSnoc (Snoc xs y) x = Refl
+
+    -- Lemma: Head of init of non-empty vector is just the head of the vector 
+    lemHeadInitIsHead : (xs : Vect (S n) a) -> (x : a) -> head (init (x :: xs)) = x
+    lemHeadInitIsHead (y :: ys) x = Refl
+
+    -- Helper for Snoc over init/last 
+    lemHeadSnocOfVect_1 : (xs : Vect n a) -> (x : a) -> snocHead (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs))) = x
+    lemHeadSnocOfVect_1 {n = Z} [] _     = Refl 
+    lemHeadSnocOfVect_1 {n = (S k)} xs x = rewrite lemSnocHeadOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
+                                           rewrite lemHeadSnocOfVect (init (x :: xs)) in 
+                                           rewrite lemHeadInitIsHead xs x in 
+                                           Refl 
+
+-- Lemma: vectOfSnoc of snocOfVect is identity on the head
+lemVectSnocHeadId : (xs : Vect (S n) a) -> head (vectOfSnoc (snocOfVect xs)) = head xs
+lemVectSnocHeadId xs = rewrite lemHeadVectOfSnoc (snocOfVect xs) in 
+                       rewrite lemHeadSnocOfVect xs in 
+                       Refl 
+
+-- Lemma: Vector of snoc tail is the tail of the vector
+lemTailVectOfSnoc : (xs : SnocVect (S n) a) -> vectOfSnoc (snocTail xs) = tail (vectOfSnoc xs)
+lemTailVectOfSnoc (Snoc xs x) = Refl
+
+-- Lemma: Tail of a snoc vector with non-empty initial segment is the tail of the initial segment with the last elt
+lemSnocTailOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocTail (Snoc xs x) = Snoc (snocTail xs) x
+lemSnocTailOfSnoc (Snoc ys y) x = Refl
+
+
+-- snocTail (snocOfVect xs) = snocOfVect (tail xs)
+
+
+-- Lemma: Every non-empty vector can be written as a cons
+lemVectIsCons : (x : a) -> (y : a) -> (xs : Vect n a) -> (ys : Vect m a) -> (x = y) -> (xs = ys) -> (x :: xs = y :: ys) 
+lemVectIsCons x y xs ys prf prf1 = rewrite prf in 
+                                   rewrite prf1 in Refl
+
+lem : (xs : Vect n a) -> (x : a) -> vectOfSnoc (snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs)))) = xs
+lem {n = Z} [] _ = Refl
+lem {n = (S k)} xs x = rewrite lemSnocTailOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
+                       ?lem_rhs_2
+ 
+
+-- Lemma: vectOfSnoc of snocOfVect is identity 
+lemVectSnocId : (xs : Vect n a) -> vectOfSnoc (snocOfVect xs) = xs
+lemVectSnocId {n = Z} []            = Refl
+lemVectSnocId {n = (S k)} (x :: xs) = rewrite lemHeadSnocOfVect (x :: xs) in 
+                                      let toReduce = vectOfSnoc (snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs)))) in 
+                                      rewrite lemVectIsCons x x toReduce xs Refl ?help2 in 
+                                      Refl
+
+
+-- Reverse a vector without using rewrite 
+reverseVect3 : Vect n a -> Vect n a
+reverseVect3 xs with (snocOfVect xs)
+  reverseVect3 []        | SnocNil = []
+  reverseVect3 (x :: xs) | Snoc ys y = y :: reverseVect3 (vectOfSnoc ys) 
 
 
 
@@ -257,14 +322,3 @@ decEquality (x :: y) (z :: w) =
                   No  contra => No (restDiffer y w contra)
     No contra => No (firstEltsDiffer y w contra)
 
-
-
--- Make Cons vectors decomposable at the type level
-{-data ConsVect : Nat -> a -> Vect n a -> Type where-}
-  {-Cons : (x : a) -> (xs : Vect n a) -> ConsVect (S n) x xs -}
-
--- Type of proofs that a vector is the reverse of another vector
-{-data Reversed : Vect n a -> Vect m a -> Type where-}
-  {-ReversedEmpty  : Reversed [] []-}
-  {-ReversedSingle : ConsVect 1 a [] -> ConsVect 1 a [] -> Reversed xs ys -}
-  -- ReversedMulti  : (xs : Vect (S n) a) -> (ys : Vect (S n) a) -> (head xs =  

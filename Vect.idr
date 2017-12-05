@@ -203,7 +203,7 @@ data SnocVect : Nat -> Type -> Type where
   SnocNil : SnocVect 0 a
   Snoc : SnocVect n a -> a -> SnocVect (S n) a
 
--- Every vector is a snoc vector
+-- Every vector can be transformed into a snoc vector
 snocOfVect : Vect n a -> SnocVect n a
 snocOfVect []          = SnocNil
 snocOfVect v@(x :: xs) = Snoc (snocOfVect (init v)) (last v) 
@@ -218,7 +218,7 @@ snocTail : SnocVect (S n) a -> SnocVect n a
 snocTail (Snoc SnocNil x)       = SnocNil
 snocTail (Snoc s@(Snoc xs y) x) = Snoc (snocTail s) x
 
--- Every snoc vector is a vector
+-- Every snoc vector can be transformed into a vector
 vectOfSnoc : SnocVect n a -> Vect n a
 vectOfSnoc SnocNil       = []
 vectOfSnoc s@(Snoc xs x) = snocHead s :: vectOfSnoc (snocTail s)
@@ -227,14 +227,14 @@ vectOfSnoc s@(Snoc xs x) = snocHead s :: vectOfSnoc (snocTail s)
 lemHeadVectOfSnoc : (xs : SnocVect (S n) a) -> head (vectOfSnoc xs) = snocHead xs 
 lemHeadVectOfSnoc (Snoc xs x) = Refl
 
+-- Lemma: Head of a snoc vector with non-empty initial segment is the head of the initial segment
+lemSnocHeadOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocHead (Snoc xs x) = snocHead xs 
+lemSnocHeadOfSnoc (Snoc xs y) x = Refl
+
 -- Lemma: Head of a Snoc of a vector is the head 
 lemHeadSnocOfVect : (xs : Vect (S n) a) -> snocHead (snocOfVect xs) = head xs
 lemHeadSnocOfVect (x :: xs) = lemHeadSnocOfVect_1 xs x
   where
-    -- Lemma: Head of a snoc vector with non-empty initial segment is the head of the initial segment
-    lemSnocHeadOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocHead (Snoc xs x) = snocHead xs 
-    lemSnocHeadOfSnoc (Snoc xs y) x = Refl
-
     -- Lemma: Head of init of non-empty vector is just the head of the vector 
     lemHeadInitIsHead : (xs : Vect (S n) a) -> (x : a) -> head (init (x :: xs)) = x
     lemHeadInitIsHead (y :: ys) x = Refl
@@ -247,42 +247,72 @@ lemHeadSnocOfVect (x :: xs) = lemHeadSnocOfVect_1 xs x
                                            rewrite lemHeadInitIsHead xs x in 
                                            Refl 
 
--- Lemma: vectOfSnoc of snocOfVect is identity on the head
-lemVectSnocHeadId : (xs : Vect (S n) a) -> head (vectOfSnoc (snocOfVect xs)) = head xs
-lemVectSnocHeadId xs = rewrite lemHeadVectOfSnoc (snocOfVect xs) in 
-                       rewrite lemHeadSnocOfVect xs in 
-                       Refl 
+-- Lemma: Last element of a vector with non-empty tail is the last element of the tail
+lemLastOfCons : (x : a) -> (xs : Vect (S n) a) -> last (x :: xs) = last xs
+lemLastOfCons x (y :: ys) = Refl
 
--- Lemma: Vector of snoc tail is the tail of the vector
-lemTailVectOfSnoc : (xs : SnocVect (S n) a) -> vectOfSnoc (snocTail xs) = tail (vectOfSnoc xs)
+-- Lemma: Tail of a vector of a Snoc is the vector of the tail 
+lemTailVectOfSnoc :  (xs : SnocVect (S n) a) -> tail (vectOfSnoc xs) = vectOfSnoc (snocTail xs)
 lemTailVectOfSnoc (Snoc xs x) = Refl
 
 -- Lemma: Tail of a snoc vector with non-empty initial segment is the tail of the initial segment with the last elt
 lemSnocTailOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocTail (Snoc xs x) = Snoc (snocTail xs) x
 lemSnocTailOfSnoc (Snoc ys y) x = Refl
 
+-- Lemma: Tail of a Snoc of a vector is the snoc vector of the tail 
+lemTailSnocVect : (xs : Vect (S n) a) -> snocTail (snocOfVect xs) = snocOfVect (tail xs)
+lemTailSnocVect (x :: xs) = lemTailSnocVect_rhs_1 x xs
+  where 
+    -- Lemma: Tail of an init can be rewritten as init of tail if there are enough elts 
+    lemTailOfInit : (x : a) -> (xs : Vect (S n) a) -> tail (init (x :: xs)) = init xs
+    lemTailOfInit x (y :: ys) = Refl
 
--- snocTail (snocOfVect xs) = snocOfVect (tail xs)
+    -- Lemma: Snocing init onto last gives the snoc vector of the entire vector
+    lemSnocOfVectInitLast : (xs : Vect (S n) a) -> Snoc (snocOfVect (init xs)) (last xs) = snocOfVect xs 
+    lemSnocOfVectInitLast (x :: xs) = Refl
 
+    -- Helper for Snoc over init/last
+    lemTailSnocVect_rhs_1 : (x : a) -> (xs : Vect n a) -> snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs))) = snocOfVect xs
+    lemTailSnocVect_rhs_1 {n = Z} x []     = Refl
+    lemTailSnocVect_rhs_1 {n = (S k)} x xs = rewrite lemSnocTailOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
+                                             rewrite lemLastOfCons x xs in 
+                                             rewrite lemTailSnocVect (init (x :: xs)) in 
+                                             rewrite lemTailOfInit x xs in 
+                                             rewrite lemSnocOfVectInitLast xs in 
+                                             Refl
 
--- Lemma: Every non-empty vector can be written as a cons
-lemVectIsCons : (x : a) -> (y : a) -> (xs : Vect n a) -> (ys : Vect m a) -> (x = y) -> (xs = ys) -> (x :: xs = y :: ys) 
-lemVectIsCons x y xs ys prf prf1 = rewrite prf in 
-                                   rewrite prf1 in Refl
-
-lem : (xs : Vect n a) -> (x : a) -> vectOfSnoc (snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs)))) = xs
-lem {n = Z} [] _ = Refl
-lem {n = (S k)} xs x = rewrite lemSnocTailOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
-                       ?lem_rhs_2
- 
-
--- Lemma: vectOfSnoc of snocOfVect is identity 
+-- Lemma: vectOfSnoc of snocOfVect is the identity 
 lemVectSnocId : (xs : Vect n a) -> vectOfSnoc (snocOfVect xs) = xs
 lemVectSnocId {n = Z} []            = Refl
 lemVectSnocId {n = (S k)} (x :: xs) = rewrite lemHeadSnocOfVect (x :: xs) in 
-                                      let toReduce = vectOfSnoc (snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs)))) in 
-                                      rewrite lemVectIsCons x x toReduce xs Refl ?help2 in 
+                                      rewrite lemTailSnocVect (x :: xs) in 
+                                      rewrite lemVectSnocId xs in 
                                       Refl
+
+-- Simplify the initial segment
+initHelper : (xs : SnocVect n a) -> (x : a) -> snocOfVect (init (snocHead (Snoc xs x) :: vectOfSnoc (snocTail (Snoc xs x)))) = xs
+initHelper {n = Z} SnocNil x = Refl
+initHelper {n = (S k)} xs x  = rewrite lemSnocHeadOfSnoc xs x in 
+                               ?initHelper_rhs_2
+
+-- Lemma: snocOfVect of vectOfSnoc is the identity
+lemSnocVectId : (xs : SnocVect n a) -> snocOfVect (vectOfSnoc xs) = xs
+lemSnocVectId {n = Z} SnocNil         = Refl
+lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in ?lemSnocVectId_rhs_1
+  where 
+    -- Simplify the last element
+    lastHelper : (xs : SnocVect n a) -> (x : a) -> last (snocHead (Snoc xs x) :: vectOfSnoc (snocTail (Snoc xs x))) = x 
+    lastHelper {n = Z} SnocNil x = Refl
+    lastHelper {n = (S k)} xs x  = rewrite lemLastOfCons (snocHead (Snoc xs x)) (vectOfSnoc (snocTail (Snoc xs x))) in 
+                                   rewrite lemSnocTailOfSnoc xs x in 
+                                   rewrite lastHelper (snocTail xs) x in 
+                                   Refl
+
+
+-- Lemma: snocOfVect of vectOfSnoc is identity
+{-lemSnocVectId : (xs : SnocVect n a) -> snocOfVect (vectOfSnoc xs) = xs-}
+{-lemSnocVectId SnocNil     = Refl-}
+{-lemSnocVectId (Snoc xs x) = ?lemSnocVectId_rhs_2-}
 
 
 -- Reverse a vector without using rewrite 

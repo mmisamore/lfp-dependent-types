@@ -259,6 +259,10 @@ lemTailVectOfSnoc (Snoc xs x) = Refl
 lemSnocTailOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocTail (Snoc xs x) = Snoc (snocTail xs) x
 lemSnocTailOfSnoc (Snoc ys y) x = Refl
 
+-- Lemma: Snocing init onto last gives the snoc vector of the entire vector
+lemSnocOfVectInitLast : (xs : Vect (S n) a) -> Snoc (snocOfVect (init xs)) (last xs) = snocOfVect xs 
+lemSnocOfVectInitLast (x :: xs) = Refl
+
 -- Lemma: Tail of a Snoc of a vector is the snoc vector of the tail 
 lemTailSnocVect : (xs : Vect (S n) a) -> snocTail (snocOfVect xs) = snocOfVect (tail xs)
 lemTailSnocVect (x :: xs) = lemTailSnocVect_rhs_1 x xs
@@ -266,10 +270,6 @@ lemTailSnocVect (x :: xs) = lemTailSnocVect_rhs_1 x xs
     -- Lemma: Tail of an init can be rewritten as init of tail if there are enough elts 
     lemTailOfInit : (x : a) -> (xs : Vect (S n) a) -> tail (init (x :: xs)) = init xs
     lemTailOfInit x (y :: ys) = Refl
-
-    -- Lemma: Snocing init onto last gives the snoc vector of the entire vector
-    lemSnocOfVectInitLast : (xs : Vect (S n) a) -> Snoc (snocOfVect (init xs)) (last xs) = snocOfVect xs 
-    lemSnocOfVectInitLast (x :: xs) = Refl
 
     -- Helper for Snoc over init/last
     lemTailSnocVect_rhs_1 : (x : a) -> (xs : Vect n a) -> snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs))) = snocOfVect xs
@@ -281,7 +281,7 @@ lemTailSnocVect (x :: xs) = lemTailSnocVect_rhs_1 x xs
                                              rewrite lemSnocOfVectInitLast xs in 
                                              Refl
 
--- Lemma: vectOfSnoc of snocOfVect is the identity 
+-- Lemma: VectOfSnoc of SnocOfVect is the identity 
 lemVectSnocId : (xs : Vect n a) -> vectOfSnoc (snocOfVect xs) = xs
 lemVectSnocId {n = Z} []            = Refl
 lemVectSnocId {n = (S k)} (x :: xs) = rewrite lemHeadSnocOfVect (x :: xs) in 
@@ -289,16 +289,12 @@ lemVectSnocId {n = (S k)} (x :: xs) = rewrite lemHeadSnocOfVect (x :: xs) in
                                       rewrite lemVectSnocId xs in 
                                       Refl
 
--- Simplify the initial segment
-initHelper : (xs : SnocVect n a) -> (x : a) -> snocOfVect (init (snocHead (Snoc xs x) :: vectOfSnoc (snocTail (Snoc xs x)))) = xs
-initHelper {n = Z} SnocNil x = Refl
-initHelper {n = (S k)} xs x  = rewrite lemSnocHeadOfSnoc xs x in 
-                               ?initHelper_rhs_2
-
--- Lemma: snocOfVect of vectOfSnoc is the identity
+-- Lemma: SnocOfVect of VectOfSnoc is the identity
 lemSnocVectId : (xs : SnocVect n a) -> snocOfVect (vectOfSnoc xs) = xs
 lemSnocVectId {n = Z} SnocNil         = Refl
-lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in ?lemSnocVectId_rhs_1
+lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in 
+                                        rewrite initHelper xs x in 
+                                        Refl
   where 
     -- Simplify the last element
     lastHelper : (xs : SnocVect n a) -> (x : a) -> last (snocHead (Snoc xs x) :: vectOfSnoc (snocTail (Snoc xs x))) = x 
@@ -308,12 +304,15 @@ lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in ?lemSnocVectI
                                    rewrite lastHelper (snocTail xs) x in 
                                    Refl
 
+    -- Lemma: Init of a vector of a snoc with non-empty init is the init of the snoc
+    lemInitVectOfSnoc : (xs : SnocVect n a) -> (x : a) -> init (vectOfSnoc (Snoc xs x)) = vectOfSnoc xs
+    lemInitVectOfSnoc SnocNil x     = Refl
+    lemInitVectOfSnoc (Snoc ys y) x = rewrite lemInitVectOfSnoc (snocTail (Snoc ys y)) x in Refl
 
--- Lemma: snocOfVect of vectOfSnoc is identity
-{-lemSnocVectId : (xs : SnocVect n a) -> snocOfVect (vectOfSnoc xs) = xs-}
-{-lemSnocVectId SnocNil     = Refl-}
-{-lemSnocVectId (Snoc xs x) = ?lemSnocVectId_rhs_2-}
-
+    initHelper : (xs : SnocVect n a) -> (x : a) -> snocOfVect (init (vectOfSnoc (Snoc xs x))) = xs
+    initHelper xs x = rewrite lemInitVectOfSnoc xs x in 
+                      rewrite lemSnocVectId xs in 
+                      Refl
 
 -- Reverse a vector without using rewrite 
 reverseVect3 : Vect n a -> Vect n a

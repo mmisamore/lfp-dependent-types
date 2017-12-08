@@ -141,21 +141,21 @@ vectTakeK = do
 -- if possible, with a statically enforced boundary check. Observe that vectTakeK is total: it provably cannot crash!
 
 -- O(n^2) list reversal
-reverse1 : List a -> List a 
-reverse1 []        = [] 
-reverse1 (x :: xs) = (reverse1 xs) ++ [x] 
+reverseList : List a -> List a 
+reverseList []        = [] 
+reverseList (x :: xs) = (reverseList xs) ++ [x] 
 
 -- Lemma: Reversing an append of Lists is the same as appending the reversed Lists in reverse
-lemReverseAppend : (xs : List a) -> (ys : List a) -> reverse1 (xs ++ ys) = reverse1 ys ++ reverse1 xs
-lemReverseAppend [] ys        = rewrite List.appendNilRightNeutral (reverse1 ys) in Refl
+lemReverseAppend : (xs : List a) -> (ys : List a) -> reverseList (xs ++ ys) = reverseList ys ++ reverseList xs
+lemReverseAppend [] ys        = rewrite List.appendNilRightNeutral (reverseList ys) in Refl
 lemReverseAppend (x :: xs) ys = rewrite lemReverseAppend xs ys in
-                                rewrite List.appendAssociative (reverse1 ys) (reverse1 xs) [x] in
+                                rewrite List.appendAssociative (reverseList ys) (reverseList xs) [x] in
                                 Refl
 
 -- Lemma: Reversing a List twice (with naive algo) is the identity
-lemReverseInvolution : (xs : List a) -> reverse1 (reverse1 xs) = xs
+lemReverseInvolution : (xs : List a) -> reverseList (reverseList xs) = xs
 lemReverseInvolution []        = Refl
-lemReverseInvolution (x :: xs) = rewrite lemReverseAppend (reverse1 xs) [x] in 
+lemReverseInvolution (x :: xs) = rewrite lemReverseAppend (reverseList xs) [x] in 
                                  rewrite lemReverseInvolution xs in
                                  Refl 
 
@@ -185,18 +185,6 @@ lemPlusCommutes (S k) m = rewrite lemPlusCommutes k m in
 lemLeftSuccRightSucc : (n : Nat) -> (m : Nat) -> (S n) + m = n + (S m)
 lemLeftSuccRightSucc Z m     = Refl
 lemLeftSuccRightSucc (S k) m = cong (lemSuccPlusRightSucc k m)
-
--- O(n) vector reversal. Uses rewrite.
-reverseVect : Vect n a -> Vect n a
-reverseVect xs = go [] xs where 
-  go : Vect n a -> Vect m a -> Vect (n + m) a 
-  go {n} acc []                  = rewrite lemPlusZero n in acc
-  go {n} {m = S m} acc (x :: xs) = rewrite sym (lemLeftSuccRightSucc n m) in go (x :: acc) xs
-
--- O(n^2) vector reversal. This is the mathematical definition.
-reverseVect2 : Vect n a -> Vect n a
-reverseVect2 [] = []
-reverseVect2 {n = S k} (x :: xs) = rewrite lemSuccIsPlusOne k in appendVect (reverseVect2 xs) [x]
 
 -- Type of snoc vectors
 data SnocVect : Nat -> Type -> Type where
@@ -240,7 +228,7 @@ lemHeadSnocOfVect (x :: xs) = lemHeadSnocOfVect_1 xs x
     lemHeadInitIsHead (y :: ys) x = Refl
 
     -- Helper for Snoc over init/last 
-    lemHeadSnocOfVect_1 : (xs : Vect n a) -> (x : a) -> snocHead (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs))) = x
+    lemHeadSnocOfVect_1 : (xs : Vect n a) -> (x : a) -> snocHead (snocOfVect (x :: xs)) = x 
     lemHeadSnocOfVect_1 {n = Z} [] _     = Refl 
     lemHeadSnocOfVect_1 {n = (S k)} xs x = rewrite lemSnocHeadOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
                                            rewrite lemHeadSnocOfVect (init (x :: xs)) in 
@@ -272,7 +260,7 @@ lemTailSnocVect (x :: xs) = lemTailSnocVect_rhs_1 x xs
     lemTailOfInit x (y :: ys) = Refl
 
     -- Helper for Snoc over init/last
-    lemTailSnocVect_rhs_1 : (x : a) -> (xs : Vect n a) -> snocTail (Snoc (snocOfVect (init (x :: xs))) (last (x :: xs))) = snocOfVect xs
+    lemTailSnocVect_rhs_1 : (x : a) -> (xs : Vect n a) -> snocTail (snocOfVect (x :: xs)) = snocOfVect xs
     lemTailSnocVect_rhs_1 {n = Z} x []     = Refl
     lemTailSnocVect_rhs_1 {n = (S k)} x xs = rewrite lemSnocTailOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
                                              rewrite lemLastOfCons x xs in 
@@ -297,7 +285,7 @@ lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in
                                         Refl
   where 
     -- Simplify the last element
-    lastHelper : (xs : SnocVect n a) -> (x : a) -> last (snocHead (Snoc xs x) :: vectOfSnoc (snocTail (Snoc xs x))) = x 
+    lastHelper : (xs : SnocVect n a) -> (x : a) -> last (vectOfSnoc (Snoc xs x)) = x
     lastHelper {n = Z} SnocNil x = Refl
     lastHelper {n = (S k)} xs x  = rewrite lemLastOfCons (snocHead (Snoc xs x)) (vectOfSnoc (snocTail (Snoc xs x))) in 
                                    rewrite lemSnocTailOfSnoc xs x in 
@@ -309,18 +297,65 @@ lemSnocVectId {n = (S k)} (Snoc xs x) = rewrite lastHelper xs x in
     lemInitVectOfSnoc SnocNil x     = Refl
     lemInitVectOfSnoc (Snoc ys y) x = rewrite lemInitVectOfSnoc (snocTail (Snoc ys y)) x in Refl
 
+    -- Simplify the initial segment
     initHelper : (xs : SnocVect n a) -> (x : a) -> snocOfVect (init (vectOfSnoc (Snoc xs x))) = xs
     initHelper xs x = rewrite lemInitVectOfSnoc xs x in 
                       rewrite lemSnocVectId xs in 
                       Refl
 
--- Reverse a vector without using rewrite 
-reverseVect3 : Vect n a -> Vect n a
-reverseVect3 xs with (snocOfVect xs)
-  reverseVect3 []        | SnocNil = []
-  reverseVect3 (x :: xs) | Snoc ys y = y :: reverseVect3 (vectOfSnoc ys) 
+-- Axiom: Function Extensionality
+funext : (f : a -> b) -> (g : a -> b) -> ((x : a) -> f x = g x) -> f = g
+funext _ _ = believe_me 
+
+-- Funext for a composite of function equal to id
+lemId : (f : b -> a) -> (g : a -> b) -> ((x : a) -> f (g x) = x) -> (f . g) = Prelude.Basics.id
+lemId f g k = funext (f . g) id k
+
+-- First half of cons-vector/snoc-vector isomorphism
+lemSnocVectId_int : Vect.snocOfVect . Vect.vectOfSnoc = Prelude.Basics.id
+lemSnocVectId_int = lemId snocOfVect vectOfSnoc lemSnocVectId
+
+-- Second half of cons-vector/snoc-vector isomorphism
+lemVectSnocId_int : Vect.vectOfSnoc . Vect.snocOfVect = Prelude.Basics.id
+lemVectSnocId_int = lemId vectOfSnoc snocOfVect lemVectSnocId 
+
+-- An interface for verified isomorphisms
+interface VerifiedIso a b where
+  to   : a -> b
+  from : b -> a
+  toFrom : to . from = Prelude.Basics.id
+  fromTo : from . to = Prelude.Basics.id
+
+-- Theorem: Cons vectors are isomorphic to Snoc vectors
+VerifiedIso (Vect n a) (SnocVect n a) where
+  to     = snocOfVect 
+  from   = vectOfSnoc 
+  toFrom = lemSnocVectId_int
+  fromTo = lemVectSnocId_int
+
+-- Reverse a vector without using rewrite. This is O(n^2)
+{-reverseVect : Vect n a -> Vect n a-}
+{-reverseVect xs with (snocOfVect xs)-}
+  {-reverseVect []        | SnocNil = []-}
+  {-reverseVect (x :: xs) | Snoc ys y = y :: reverseVect (vectOfSnoc ys) -}
+
+-- Naive O(n^2) vector reversal
+reverseVect : Vect n a -> Vect n a
+reverseVect []        = []
+reverseVect (x :: xs) = last (x :: xs) :: reverseVect (init (x :: xs))
+
+-- Lemma: Last elt of the reverse of a non-empty vector is the head
+lemLastOfReverse : (xs : Vect (S n) a) -> last (reverseVect xs) = head xs
+lemLastOfReverse xs = ?lemLastOfReverse_rhs
 
 
+{-lastHelper : (x : a) -> (xs : Vect n a) -> last (last (x :: xs) :: reverseVect (init (x :: xs))) = x-}
+{-lastHelper {n = Z} x []     = Refl-}
+{-lastHelper {n = (S k)} x xs = rewrite lemLastOfCons (last (x :: xs)) (reverseVect (init (x :: xs))) in ?lemLast_rhs_2-}
+
+lemReverseVectInv : (xs : Vect n a) -> reverseVect (reverseVect xs) = xs
+lemReverseVectInv []        = Refl
+lemReverseVectInv (x :: xs) = ?lemReverseVectInv_rhs_2
 
 
 -- Lemma: Vectors differ if they differ in length

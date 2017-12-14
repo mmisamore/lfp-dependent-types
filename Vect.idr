@@ -334,14 +334,22 @@ VerifiedIso (Vect n a) (SnocVect n a) where
   fromTo = lemVectSnocId_int
 
 
--- Naive O(n^2) vector reversal
+-- Naive O(n^2) vector reversal. We can prove things about this simpler form.
 reverseVect : Vect n a -> Vect n a
 reverseVect []        = []
 reverseVect (x :: xs) = last (x :: xs) :: reverseVect (init (x :: xs))
 
--- O(n) vector reversal
+-- O(n) vector reversal. More efficient but harder to prove things about it.
 reverseVect2 : Vect n a -> Vect n a
-reverseVect2 x = ?reverseVect2_rhs
+reverseVect2 xs = go [] xs 
+  where
+    go : Vect n a -> Vect m a -> Vect (n + m) a
+    go {n} {m = Z} acc []          = rewrite lemPlusZero n in acc
+    go {n} {m = S k} acc (x :: xs) = rewrite sym (lemLeftSuccRightSucc n k) in 
+                                     go (x :: acc) xs
+
+lemHeadRev2 : (xs : Vect (S n) a) -> head (reverseVect2 xs) = last xs
+lemHeadRev2 (x :: xs) = ?lemHeadRev2_rhs_1
 
 -- Lemma: Reverse of a non-empty vector can be written as a cons
 lemReverseAsCons : (xs : Vect (S n) a) -> reverseVect xs = (last xs) :: reverseVect (init xs)

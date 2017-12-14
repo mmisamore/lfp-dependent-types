@@ -219,20 +219,20 @@ lemHeadVectOfSnoc (Snoc xs x) = Refl
 lemSnocHeadOfSnoc : (xs : SnocVect (S n) a) -> (x : a) -> snocHead (Snoc xs x) = snocHead xs 
 lemSnocHeadOfSnoc (Snoc xs y) x = Refl
 
+-- Lemma: Head of init of non-empty vector is just the head of the vector 
+lemHeadInitIsHead : (x : a) -> (xs : Vect (S n) a) -> head (init (x :: xs)) = x
+lemHeadInitIsHead x (y :: ys) = Refl
+
 -- Lemma: Head of a Snoc of a vector is the head 
 lemHeadSnocOfVect : (xs : Vect (S n) a) -> snocHead (snocOfVect xs) = head xs
 lemHeadSnocOfVect (x :: xs) = lemHeadSnocOfVect_1 xs x
   where
-    -- Lemma: Head of init of non-empty vector is just the head of the vector 
-    lemHeadInitIsHead : (xs : Vect (S n) a) -> (x : a) -> head (init (x :: xs)) = x
-    lemHeadInitIsHead (y :: ys) x = Refl
-
     -- Helper for Snoc over init/last 
     lemHeadSnocOfVect_1 : (xs : Vect n a) -> (x : a) -> snocHead (snocOfVect (x :: xs)) = x 
     lemHeadSnocOfVect_1 {n = Z} [] _     = Refl 
     lemHeadSnocOfVect_1 {n = (S k)} xs x = rewrite lemSnocHeadOfSnoc (snocOfVect (init (x :: xs))) (last (x :: xs)) in 
                                            rewrite lemHeadSnocOfVect (init (x :: xs)) in 
-                                           rewrite lemHeadInitIsHead xs x in 
+                                           rewrite lemHeadInitIsHead x xs in 
                                            Refl 
 
 -- Lemma: Last element of a vector with non-empty tail is the last element of the tail
@@ -333,30 +333,54 @@ VerifiedIso (Vect n a) (SnocVect n a) where
   toFrom = lemSnocVectId_int
   fromTo = lemVectSnocId_int
 
--- Reverse a vector without using rewrite. This is O(n^2)
-{-reverseVect : Vect n a -> Vect n a-}
-{-reverseVect xs with (snocOfVect xs)-}
-  {-reverseVect []        | SnocNil = []-}
-  {-reverseVect (x :: xs) | Snoc ys y = y :: reverseVect (vectOfSnoc ys) -}
 
 -- Naive O(n^2) vector reversal
 reverseVect : Vect n a -> Vect n a
 reverseVect []        = []
 reverseVect (x :: xs) = last (x :: xs) :: reverseVect (init (x :: xs))
 
+-- O(n) vector reversal
+reverseVect2 : Vect n a -> Vect n a
+reverseVect2 x = ?reverseVect2_rhs
+
+-- Lemma: Reverse of a non-empty vector can be written as a cons
+lemReverseAsCons : (xs : Vect (S n) a) -> reverseVect xs = (last xs) :: reverseVect (init xs)
+lemReverseAsCons {n = Z} (x :: [])     = Refl
+lemReverseAsCons {n = (S k)} (x :: xs) = Refl
+
 -- Lemma: Last elt of the reverse of a non-empty vector is the head
 lemLastOfReverse : (xs : Vect (S n) a) -> last (reverseVect xs) = head xs
-lemLastOfReverse xs = ?lemLastOfReverse_rhs
+lemLastOfReverse {n = Z} (x :: [])     = Refl
+lemLastOfReverse {n = (S k)} (x :: xs) = rewrite lemLastOfCons (last (x :: xs)) (reverseVect (init (x :: xs))) in 
+                                         rewrite lemLastOfReverse (init (x :: xs)) in 
+                                         rewrite lemHeadInitIsHead x xs in 
+                                         Refl
 
+-- Lemma: Init of a cons is a cons onto an init 
+lemInitCons : (x : a) -> (xs : Vect (S n) a) -> init (x :: xs) = x :: init xs
+lemInitCons {n = Z} x (y :: [])     = Refl
+lemInitCons {n = (S k)} x (y :: ys) = Refl
 
-{-lastHelper : (x : a) -> (xs : Vect n a) -> last (last (x :: xs) :: reverseVect (init (x :: xs))) = x-}
-{-lastHelper {n = Z} x []     = Refl-}
-{-lastHelper {n = (S k)} x xs = rewrite lemLastOfCons (last (x :: xs)) (reverseVect (init (x :: xs))) in ?lemLast_rhs_2-}
+-- Lemma: Tail of an init of a cons is the init of the tail
+lemTailInitCons : (x : a) -> (xs : Vect (S n) a) -> tail (init (x :: xs)) = init xs
+lemTailInitCons {n = Z} x (y :: ys)     = Refl
+lemTailInitCons {n = (S k)} x (y :: ys) = Refl
 
-lemReverseVectInv : (xs : Vect n a) -> reverseVect (reverseVect xs) = xs
-lemReverseVectInv []        = Refl
-lemReverseVectInv (x :: xs) = ?lemReverseVectInv_rhs_2
+-- Lemma: Init of the reverse of a non-empty vector is the reversed tail
+lemInitOfRevIsTail : (xs : Vect (S n) a) -> init (reverseVect xs) = reverseVect (tail xs)
+lemInitOfRevIsTail {n = Z} (x :: [])     = Refl
+lemInitOfRevIsTail {n = (S k)} (x :: xs) = rewrite lemInitCons (last (x :: xs)) (reverseVect (init (x :: xs))) in 
+                                           rewrite lemInitOfRevIsTail (init (x :: xs)) in 
+                                           rewrite lemTailInitCons x xs in 
+                                           rewrite lemLastOfCons x xs in 
+                                           rewrite lemReverseAsCons xs in Refl 
 
+-- Proposition: Reversing a vector is an involution - doing it twice is the identity 
+propReverseVectInv : (xs : Vect n a) -> reverseVect (reverseVect xs) = xs
+propReverseVectInv []        = Refl
+propReverseVectInv (x :: xs) = rewrite lemLastOfReverse (x :: xs) in 
+                               rewrite lemInitOfRevIsTail (x :: xs) in 
+                               rewrite propReverseVectInv xs in Refl
 
 -- Lemma: Vectors differ if they differ in length
 vectDiffOnLength : (xs : Vect n a) -> (ys : Vect m a) -> ((n = m) -> Void) -> (xs = ys) -> Void
@@ -374,7 +398,7 @@ restDiffer w w contra Refl = contra Refl
 firstEltsDiffer : (y : Vect n a) -> (w : Vect m a) -> ((x = z) -> Void) -> (x :: y = z :: w) -> Void
 firstEltsDiffer w w contra Refl = contra Refl 
 
--- Better decidable equality for Vectors
+-- Decidable equality for Vectors assuming decidable element equality
 decEquality : DecEq a => (xs : Vect n a) -> (ys : Vect m a) -> Dec (xs = ys)
 decEquality [] []       = Yes Refl 
 decEquality [] (x :: y) = No (\refl => vectDiffOnLength [] (x::y) zeroNotSuccessor refl) 

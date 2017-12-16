@@ -348,8 +348,10 @@ reverseVect2 xs = go [] xs
     go {n} {m = S k} acc (x :: xs) = rewrite sym (lemLeftSuccRightSucc n k) in 
                                      go (x :: acc) xs
 
+-- No idea how to proceed here...
 lemHeadRev2 : (xs : Vect (S n) a) -> head (reverseVect2 xs) = last xs
-lemHeadRev2 (x :: xs) = ?lemHeadRev2_rhs_1
+lemHeadRev2 {n = Z} (x :: [])     = Refl
+lemHeadRev2 {n = (S k)} (x :: xs) = ?lemHeadRev2_rhs_1
 
 -- Lemma: Reverse of a non-empty vector can be written as a cons
 lemReverseAsCons : (xs : Vect (S n) a) -> reverseVect xs = (last xs) :: reverseVect (init xs)
